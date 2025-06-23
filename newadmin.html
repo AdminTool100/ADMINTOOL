@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin – Duyệt Người Dùng</title>
+  <style>
+    body {
+      background-color: #000;
+      font-family: 'Courier New', monospace;
+      color: #00f0ff;
+      padding: 20px;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h1 {
+      text-shadow: 0 0 15px #00f0ff;
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
+
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid #00f0ff33;
+      border-radius: 15px;
+      box-shadow: 0 0 20px #00f0ff80;
+    }
+
+    table {
+      width: 100%;
+      min-width: 700px;
+      background: rgba(0, 0, 0, 0.7);
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 12px 15px;
+      text-align: center;
+      border-bottom: 1px solid #00f0ff33;
+      color: #00f0ff;
+      white-space: nowrap;
+    }
+
+    th {
+      background-color: rgba(0, 255, 255, 0.1);
+      text-shadow: 0 0 5px #00f0ff;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover {
+      background-color: rgba(0, 255, 255, 0.05);
+    }
+
+    button {
+      padding: 6px 12px;
+      margin: 2px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+      font-family: inherit;
+      transition: transform 0.2s, box-shadow 0.3s;
+    }
+
+    button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 10px white;
+    }
+
+    .duyet {
+      background: #00ff99;
+      color: #000;
+      box-shadow: 0 0 10px #00ff99;
+    }
+
+    .xoa {
+      background: #ff0040;
+      color: #fff;
+      box-shadow: 0 0 10px #ff0040;
+    }
+
+    .khoiphuc {
+      background: #0099ff;
+      color: #fff;
+      box-shadow: 0 0 10px #0099ff;
+    }
+    
+    .huyduyet {
+        background: #f0ad4e;
+        color: #fff;
+        box-shadow: 0 0 10px #f0ad4e;
+    }
+
+    .status {
+      font-weight: bold;
+    }
+
+    .approved {
+      color: #00ff00;
+      text-shadow: 0 0 5px #00ff00;
+    }
+
+    .pending {
+      color: #ffaa00;
+      text-shadow: 0 0 5px #ffaa00;
+    }
+
+    .no-users {
+        padding: 40px;
+        font-size: 1.2em;
+        color: #ffaa00;
+    }
+  </style>
+</head>
+<body>
+  <h1>🚀 Tool Exercal – Quản Lý Duyệt Người Dùng</h1>
+
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>STT</th>
+          <th>Tên Người Dùng</th>
+          <th>Email</th>
+          <th>Trạng Thái</th>
+          <th>Thao Tác</th>
+        </tr>
+      </thead>
+      <tbody id="userTable">
+        </tbody>
+    </table>
+  </div>
+
+  <script>
+    // Lấy danh sách người dùng từ localStorage, nếu không có thì tạo mảng rỗng
+    let users = JSON.parse(localStorage.getItem("users")) || [];
+
+    // Hàm để lưu lại danh sách người dùng vào localStorage
+    function saveUsers() {
+      localStorage.setItem("users", JSON.stringify(users));
+    }
+
+    // Hàm để vẽ lại bảng danh sách người dùng
+    function renderTable() {
+      const tableBody = document.getElementById("userTable");
+      tableBody.innerHTML = ""; // Xóa nội dung cũ của bảng
+
+      // Nếu không có người dùng nào, hiển thị thông báo
+      if (users.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="5" class="no-users">Chưa có người dùng nào đăng ký.</td></tr>`;
+        return;
+      }
+
+      // Lặp qua từng người dùng để tạo hàng trong bảng
+      users.forEach((user, index) => {
+        const isApproved = user.approved === "true";
+        const statusClass = isApproved ? "approved" : "pending";
+        const statusText = isApproved ? "✅ Đã duyệt" : "⏳ Chờ duyệt";
+
+        // Tạo các nút hành động dựa trên trạng thái của người dùng
+        const actionButtons = `
+            ${!isApproved 
+              ? `<button class="duyet" onclick="toggleApproval(${index})">Duyệt</button>` 
+              : `<button class="huyduyet" onclick="toggleApproval(${index})">Hủy Duyệt</button>`
+            }
+            <button class="khoiphuc" onclick="restorePassword(${index})">Khôi phục MK</button>
+            <button class="xoa" onclick="deleteUser(${index})">Xoá</button>
+        `;
+
+        // Tạo một hàng mới và thêm vào bảng
+        const row = `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${user.username || "Không rõ"}</td>
+            <td>${user.email || "Không rõ"}</td>
+            <td class="status ${statusClass}">${statusText}</td>
+            <td>${actionButtons}</td>
+          </tr>`;
+        
+        tableBody.innerHTML += row;
+      });
+    }
+
+    // Hàm để thay đổi trạng thái duyệt (Duyệt <-> Hủy duyệt)
+    function toggleApproval(index) {
+        const user = users[index];
+        const isCurrentlyApproved = user.approved === "true";
+        const actionText = isCurrentlyApproved ? 'HỦY DUYỆT' : 'DUYỆT';
+        
+        if (confirm(`Bạn có chắc muốn ${actionText} tài khoản "${user.username}" không?`)) {
+            user.approved = isCurrentlyApproved ? "false" : "true";
+            saveUsers(); // Lưu lại thay đổi
+            renderTable(); // Vẽ lại bảng để cập nhật giao diện
+        }
+    }
+
+    // Hàm để xóa người dùng
+    function deleteUser(index) {
+      const user = users[index];
+      if (confirm(`Bạn có chắc muốn XOÁ VĨNH VIỄN người dùng "${user.username}" không? Hành động này không thể hoàn tác.`)) {
+        users.splice(index, 1); // Xóa người dùng khỏi mảng
+        saveUsers();
+        renderTable();
+      }
+    }
+
+    // Hàm để xem lại mật khẩu
+    function restorePassword(index) {
+      const user = users[index];
+      alert(`🔐 Mật khẩu của tài khoản "${user.username}" là: ${user.password}`);
+    }
+
+    // Chạy hàm renderTable() lần đầu tiên khi trang được tải
+    renderTable();
+  </script>
+</body>
+</html>
