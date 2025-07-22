@@ -2,10 +2,8 @@ import requests
 import json
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from collections import Counter
 
 app = FastAPI()
-
 
 class Phien:
     def __init__(self, dice, total, result):
@@ -13,17 +11,11 @@ class Phien:
         self.total = total
         self.result = result
 
-
 def du_doan_theo_cong_thuc_moi(history_raw):
     if len(history_raw) < 3:
         return None
 
-    # Chuyển đổi sang dạng Phien
-    history = [
-        Phien(item["dice"], item["total"], item["result"])
-        for item in history_raw
-    ]
-
+    history = [Phien(item["dice"], item["total"], item["result"]) for item in history_raw]
     p3, p2, p1 = history[-3], history[-2], history[-1]
 
     # Công thức 1
@@ -47,7 +39,7 @@ def du_doan_theo_cong_thuc_moi(history_raw):
         elif p2.dice[0] > p3.dice[0]:
             return "Tài"
 
-    # Công thức 4 và 5
+    # Công thức 4, 5
     sorted_dice = sorted(p2.dice)
     if abs(sorted_dice[0] - sorted_dice[1]) == 1 and abs(sorted_dice[2] - sorted_dice[1]) > 1:
         return "Tài" if p2.result == "Xỉu" else "Xỉu"
@@ -79,7 +71,7 @@ def du_doan_theo_cong_thuc_moi(history_raw):
     elif seq == [4, 5, 6]:
         return "Xỉu"
 
-    # Công thức 9: cầu kép điểm (tổng)
+    # Công thức 9: Cầu kép theo tổng điểm
     count_same_total = 1
     for i in range(len(history) - 2, 0, -1):
         if history[i].total == history[i-1].total:
@@ -99,7 +91,7 @@ def du_doan_theo_cong_thuc_moi(history_raw):
     last3 = [p3.result, p2.result, p1.result]
     if last3[0] != last3[1] and last3[0] == last3[2]:
         return last3[0]  # theo 1-1
-    # bệt ≥ 4
+
     count_bet = 1
     for i in range(len(history) - 1, 0, -1):
         if history[i].result == history[i-1].result:
@@ -109,8 +101,13 @@ def du_doan_theo_cong_thuc_moi(history_raw):
     if count_bet >= 4:
         return history[-1].result
 
-    # Nếu không khớp công thức nào → theo phiên trước
+    # Không khớp công thức nào → theo phiên trước
     return p2.result
+
+
+@app.get("/")
+def home():
+    return {"message": "FastAPI server is running!"}
 
 
 @app.get("/predict")
@@ -132,7 +129,6 @@ def predict():
 
         current = history[0]
         next_session = current["session"] + 1
-
         du_doan = du_doan_theo_cong_thuc_moi(history[:10])
 
         return {
@@ -142,7 +138,7 @@ def predict():
             "current_total": current["total"],
             "next_session": next_session,
             "du_doan": du_doan,
-            "ly_do": "Dự đoán theo 10 công thức xí ngầu nâng cao"
+            "Te_le": "@ExTaiXiu2010"
         }
 
     except Exception as e:
