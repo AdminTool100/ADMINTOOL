@@ -5,17 +5,23 @@ from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
+
 class Phien:
     def __init__(self, dice, total, result):
         self.dice = dice
         self.total = total
         self.result = result
 
+
 def du_doan_theo_cong_thuc_moi(history_raw):
     if len(history_raw) < 3:
         return None
 
-    history = [Phien(item["dice"], item["total"], item["result"]) for item in history_raw]
+    history = [
+        Phien(item["dice"], item["total"], item["result"])
+        for item in history_raw
+    ]
+
     p3, p2, p1 = history[-3], history[-2], history[-1]
 
     # Công thức 1
@@ -39,7 +45,7 @@ def du_doan_theo_cong_thuc_moi(history_raw):
         elif p2.dice[0] > p3.dice[0]:
             return "Tài"
 
-    # Công thức 4, 5
+    # Công thức 4 + 5
     sorted_dice = sorted(p2.dice)
     if abs(sorted_dice[0] - sorted_dice[1]) == 1 and abs(sorted_dice[2] - sorted_dice[1]) > 1:
         return "Tài" if p2.result == "Xỉu" else "Xỉu"
@@ -71,7 +77,7 @@ def du_doan_theo_cong_thuc_moi(history_raw):
     elif seq == [4, 5, 6]:
         return "Xỉu"
 
-    # Công thức 9: Cầu kép theo tổng điểm
+    # Công thức 9: cầu kép điểm
     count_same_total = 1
     for i in range(len(history) - 2, 0, -1):
         if history[i].total == history[i-1].total:
@@ -87,11 +93,10 @@ def du_doan_theo_cong_thuc_moi(history_raw):
     elif count_same_total in [12, 15, 17]:
         return "Xỉu"
 
-    # Công thức 10: 1-1 hoặc bệt
+    # Công thức 10: cầu 1-1 hoặc bệt
     last3 = [p3.result, p2.result, p1.result]
     if last3[0] != last3[1] and last3[0] == last3[2]:
-        return last3[0]  # theo 1-1
-
+        return last3[0]  # theo cầu 1-1
     count_bet = 1
     for i in range(len(history) - 1, 0, -1):
         if history[i].result == history[i-1].result:
@@ -106,11 +111,6 @@ def du_doan_theo_cong_thuc_moi(history_raw):
 
 
 @app.get("/")
-def home():
-    return {"message": "FastAPI server is running!"}
-
-
-@app.get("/predict")
 def predict():
     try:
         response = requests.get("https://taikhi-aqws.onrender.com/api/taixiu/history")
@@ -129,6 +129,7 @@ def predict():
 
         current = history[0]
         next_session = current["session"] + 1
+
         du_doan = du_doan_theo_cong_thuc_moi(history[:10])
 
         return {
