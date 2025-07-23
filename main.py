@@ -113,7 +113,7 @@ def du_doan_theo_cong_thuc_moi(history_raw):
 @app.get("/")
 def predict():
     try:
-        response = requests.get("https://taikhi-aqws.onrender.com/api/taixiu/history")
+        response = requests.get("https://saolo-binhtool.onrender.com/api/taixiu/history")
         response.raise_for_status()
 
         raw_text = response.text.strip()
