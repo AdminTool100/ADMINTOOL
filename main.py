@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 app = FastAPI()
 model = None
 
-# Lấy lịch sử
+# Lấy dữ liệu lịch sử từ API
 def fetch_data():
     try:
         res = requests.get("https://saolo-binhtool.onrender.com/api/taixiu/history")
@@ -19,7 +19,7 @@ def fetch_data():
     except:
         return []
 
-# Chuyển đổi dữ liệu để train
+# Tạo đặc trưng để huấn luyện từ 5 phiên gần nhất
 def build_features(data, depth=5):
     rows = []
     for i in range(depth, len(data)):
@@ -36,6 +36,7 @@ def build_features(data, depth=5):
     df = pd.DataFrame(rows)
     return df
 
+# Tự động huấn luyện khi khởi động
 @app.on_event("startup")
 def startup():
     global model
@@ -48,10 +49,12 @@ def startup():
     model = lgb.LGBMClassifier(n_estimators=200, learning_rate=0.1)
     model.fit(X, y)
 
+# Trang chủ API
 @app.get("/")
 def home():
-    return {"message": "AI Dự đoán Tài/Xỉu (LightGBM 5 phiên) đang chạy..."}
+    return {"message": "API Dự đoán Tài/Xỉu bằng AI đang chạy."}
 
+# Endpoint dự đoán
 @app.get("/predict")
 def predict():
     global model
