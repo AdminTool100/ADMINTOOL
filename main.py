@@ -11,7 +11,7 @@ model = None
 # Lấy dữ liệu lịch sử từ API
 def fetch_data():
     try:
-        res = requests.get("https://saolo-binhtool.onrender.com/api/taixiu/history")
+        res = requests.get("https://saobody-lopq.onrender.com/api/taixiu/history")
         res.raise_for_status()
         lines = res.text.strip().splitlines()
         data = [json.loads(line) for line in lines if line.strip()]
