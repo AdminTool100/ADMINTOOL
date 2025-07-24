@@ -4,11 +4,26 @@ import lightgbm as lgb
 import pandas as pd
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+import os
+import time
+from threading import Thread
 
 app = FastAPI()
 model = None
+trained_sessions = set()  # Set lưu session đã học
 
-# Lấy dữ liệu lịch sử từ API
+TRAINED_FILE = "trained_sessions.json"
+
+# Load session đã học trước đó nếu có
+if os.path.exists(TRAINED_FILE):
+    with open(TRAINED_FILE, "r") as f:
+        trained_sessions = set(json.load(f))
+
+def save_trained_sessions():
+    with open(TRAINED_FILE, "w") as f:
+        json.dump(list(trained_sessions), f)
+
+# Lấy dữ liệu lịch sử
 def fetch_data():
     try:
         res = requests.get("https://saolo-binhtool.onrender.com/api/taixiu/history")
@@ -19,7 +34,7 @@ def fetch_data():
     except:
         return []
 
-# Tạo đặc trưng để huấn luyện từ 5 phiên gần nhất
+# Xây dựng dữ liệu huấn luyện
 def build_features(data, depth=5):
     rows = []
     for i in range(depth, len(data)):
@@ -33,28 +48,42 @@ def build_features(data, depth=5):
         label = data[i]["result"]
         row["label"] = 1 if label == "Tài" else 0
         rows.append(row)
-    df = pd.DataFrame(rows)
-    return df
+    return pd.DataFrame(rows)
 
-# Tự động huấn luyện khi khởi động
+# Luồng background tự động huấn luyện nếu có phiên mới
+def auto_train():
+    global model, trained_sessions
+    while True:
+        data = fetch_data()
+        if len(data) < 15:
+            time.sleep(5)
+            continue
+
+        latest_session = data[0]["session"]
+        if latest_session in trained_sessions:
+            time.sleep(2)
+            continue
+
+        df = build_features(data)
+        X = df.drop("label", axis=1)
+        y = df["label"]
+
+        model = lgb.LGBMClassifier(n_estimators=200, learning_rate=0.1)
+        model.fit(X, y)
+
+        trained_sessions.add(latest_session)
+        save_trained_sessions()
+        print(f"✅ Huấn luyện xong phiên {latest_session}")
+        time.sleep(2)
+
 @app.on_event("startup")
-def startup():
-    global model
-    data = fetch_data()
-    if len(data) < 15:
-        return
-    df = build_features(data)
-    X = df.drop("label", axis=1)
-    y = df["label"]
-    model = lgb.LGBMClassifier(n_estimators=200, learning_rate=0.1)
-    model.fit(X, y)
+def start_background():
+    Thread(target=auto_train, daemon=True).start()
 
-# Trang chủ API
 @app.get("/")
 def home():
-    return {"message": "API Dự đoán Tài/Xỉu bằng AI đang chạy."}
+    return {"message": "AI Dự đoán Tài/Xỉu đang hoạt động."}
 
-# Endpoint dự đoán
 @app.get("/predict")
 def predict():
     global model
