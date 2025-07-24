@@ -10,20 +10,28 @@ from threading import Thread
 
 app = FastAPI()
 model = None
-trained_sessions = set()  # Set lưu session đã học
+trained_sessions = set()
 
 TRAINED_FILE = "trained_sessions.json"
 
-# Load session đã học trước đó nếu có
+# Load các phiên đã huấn luyện trước đó nếu có
 if os.path.exists(TRAINED_FILE):
     with open(TRAINED_FILE, "r") as f:
-        trained_sessions = set(json.load(f))
+        try:
+            trained_sessions = set(json.load(f))
+        except:
+            trained_sessions = set()
 
+# Lưu toàn bộ session đã huấn luyện (KHÔNG GIỚI HẠN)
 def save_trained_sessions():
-    with open(TRAINED_FILE, "w") as f:
-        json.dump(list(trained_sessions), f)
+    try:
+        with open(TRAINED_FILE, "w") as f:
+            json.dump(list(trained_sessions), f)
+        print(f"💾 Đã lưu {len(trained_sessions)} phiên vào trained_sessions.json")
+    except Exception as e:
+        print("❌ Lỗi khi lưu trained_sessions.json:", e)
 
-# Lấy dữ liệu lịch sử
+# Lấy dữ liệu lịch sử từ API
 def fetch_data():
     try:
         res = requests.get("https://saolo-binhtool.onrender.com/api/taixiu/history")
@@ -31,10 +39,11 @@ def fetch_data():
         lines = res.text.strip().splitlines()
         data = [json.loads(line) for line in lines if line.strip()]
         return data
-    except:
+    except Exception as e:
+        print("⚠️ Lỗi khi fetch dữ liệu:", e)
         return []
 
-# Xây dựng dữ liệu huấn luyện
+# Xây dựng đặc trưng từ dữ liệu
 def build_features(data, depth=5):
     rows = []
     for i in range(depth, len(data)):
@@ -50,7 +59,7 @@ def build_features(data, depth=5):
         rows.append(row)
     return pd.DataFrame(rows)
 
-# Luồng background tự động huấn luyện nếu có phiên mới
+# Luồng chạy nền tự huấn luyện khi có phiên mới
 def auto_train():
     global model, trained_sessions
     while True:
@@ -76,13 +85,14 @@ def auto_train():
         print(f"✅ Huấn luyện xong phiên {latest_session}")
         time.sleep(2)
 
+# Khi server khởi động
 @app.on_event("startup")
 def start_background():
     Thread(target=auto_train, daemon=True).start()
 
 @app.get("/")
 def home():
-    return {"message": "AI Dự đoán Tài/Xỉu đang hoạt động."}
+    return {"message": "✅ AI Dự đoán Tài/Xỉu đang hoạt động!"}
 
 @app.get("/predict")
 def predict():
