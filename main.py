@@ -11,27 +11,29 @@ from threading import Thread
 app = FastAPI()
 model = None
 trained_sessions = set()
-
 TRAINED_FILE = "trained_sessions.json"
 
-# Load các phiên đã huấn luyện trước đó nếu có
+# Load phiên đã huấn luyện nếu có
 if os.path.exists(TRAINED_FILE):
-    with open(TRAINED_FILE, "r") as f:
-        try:
+    try:
+        with open(TRAINED_FILE, "r") as f:
             trained_sessions = set(json.load(f))
-        except:
-            trained_sessions = set()
+        print(f"📁 Đã load {len(trained_sessions)} phiên từ {TRAINED_FILE}")
+    except:
+        trained_sessions = set()
+else:
+    print("📁 Chưa có file trained_sessions.json")
 
-# Lưu toàn bộ session đã huấn luyện (KHÔNG GIỚI HẠN)
+# Ghi lại các phiên đã huấn luyện
 def save_trained_sessions():
     try:
         with open(TRAINED_FILE, "w") as f:
-            json.dump(list(trained_sessions), f)
-        print(f"💾 Đã lưu {len(trained_sessions)} phiên vào trained_sessions.json")
+            json.dump(sorted(list(trained_sessions)), f)
+        print(f"💾 Đã lưu {len(trained_sessions)} phiên vào {TRAINED_FILE}")
     except Exception as e:
-        print("❌ Lỗi khi lưu trained_sessions.json:", e)
+        print("❌ Lỗi ghi file trained_sessions.json:", e)
 
-# Lấy dữ liệu lịch sử từ API
+# Lấy dữ liệu từ API
 def fetch_data():
     try:
         res = requests.get("https://saolo-binhtool.onrender.com/api/taixiu/history")
@@ -40,10 +42,10 @@ def fetch_data():
         data = [json.loads(line) for line in lines if line.strip()]
         return data
     except Exception as e:
-        print("⚠️ Lỗi khi fetch dữ liệu:", e)
+        print("❌ Lỗi fetch_data:", e)
         return []
 
-# Xây dựng đặc trưng từ dữ liệu
+# Tạo đặc trưng từ dữ liệu
 def build_features(data, depth=5):
     rows = []
     for i in range(depth, len(data)):
@@ -54,25 +56,28 @@ def build_features(data, depth=5):
             row[f'd{j+1}_2'] = item['dice'][1]
             row[f'd{j+1}_3'] = item['dice'][2]
             row[f'total{j+1}'] = item['total']
-        label = data[i]["result"]
-        row["label"] = 1 if label == "Tài" else 0
+        row["label"] = 1 if data[i]["result"] == "Tài" else 0
         rows.append(row)
     return pd.DataFrame(rows)
 
-# Luồng chạy nền tự huấn luyện khi có phiên mới
+# Luồng huấn luyện nền
 def auto_train():
     global model, trained_sessions
+    print("🟡 Khởi động luồng huấn luyện tự động...")
     while True:
         data = fetch_data()
         if len(data) < 15:
+            print("⚠️ Dữ liệu chưa đủ để huấn luyện.")
             time.sleep(5)
             continue
 
         latest_session = data[0]["session"]
         if latest_session in trained_sessions:
+            print(f"⏩ Phiên {latest_session} đã huấn luyện.")
             time.sleep(2)
             continue
 
+        print(f"🔄 Đang huấn luyện phiên {latest_session}...")
         df = build_features(data)
         X = df.drop("label", axis=1)
         y = df["label"]
@@ -85,21 +90,23 @@ def auto_train():
         print(f"✅ Huấn luyện xong phiên {latest_session}")
         time.sleep(2)
 
-# Khi server khởi động
+# Khởi động huấn luyện nền
 @app.on_event("startup")
 def start_background():
     Thread(target=auto_train, daemon=True).start()
 
+# Endpoint chính
 @app.get("/")
 def home():
-    return {"message": "✅ AI Dự đoán Tài/Xỉu đang hoạt động!"}
+    return {"message": "🤖 API Dự đoán Tài/Xỉu AI đang hoạt động."}
 
+# Dự đoán kết quả phiên tiếp theo
 @app.get("/predict")
 def predict():
     global model
     data = fetch_data()
     if len(data) < 10 or model is None:
-        return JSONResponse(content={"error": "Thiếu dữ liệu hoặc chưa huấn luyện xong"})
+        return JSONResponse(content={"error": "⚠️ Thiếu dữ liệu hoặc chưa huấn luyện xong"})
 
     latest_df = build_features(data[-10:], depth=5)
     latest = latest_df.drop("label", axis=1).iloc[-1:]
