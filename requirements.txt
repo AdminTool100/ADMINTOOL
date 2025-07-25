@@ -1,6 +1,6 @@
 fastapi
 uvicorn
 pandas
-lightgbm
+catboost
 scikit-learn
 requests
