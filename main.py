@@ -127,9 +127,9 @@ def predict():
         "total": current["total"],
         "result": current["result"],
         "next_session": current["session"] + 1,
-        "du_doan_Api": du_doan,
+        "du_doan_AI": du_doan,
         "confidence": f"{round(confidence * 100, 2)}%",
-        "version": "SIMON SYSTEM V1",
+        "AI_version": "SIMON SYSTEM V1",
         "data_used": f"{len(data)} phiên",
         "telegram": "@ExTaiXiu2010"
     }
