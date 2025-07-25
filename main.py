@@ -1,95 +1,141 @@
 import requests
 import json
+import pandas as pd
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from catboost import CatBoostClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+import joblib
+import os
 
 app = FastAPI()
+model_path = "model_catboost.pkl"
+model = None
 
-# ------------------- Load công thức từ file -------------------
-with open("8k_cong_thuc.json", "r", encoding="utf-8") as f:
-    cong_thuc = json.load(f)
-
-with open("thuattoan.json", "r", encoding="utf-8") as f:
-    thuattoan = json.load(f)
-
-# ------------------- Hàm lấy dữ liệu lịch sử từ API -------------------
+# ------------------- Lấy dữ liệu -------------------
 def fetch_data():
     try:
         res = requests.get("https://saobody-lopq.onrender.com/api/taixiu/history")
         res.raise_for_status()
-
-        # ✅ FIX lỗi JSONDecodeError bằng cách xử lý JSON Lines
         lines = res.text.strip().splitlines()
         data = [json.loads(line) for line in lines if line.strip()]
-        return data
-    except Exception as e:
-        print("❌ Lỗi khi lấy dữ liệu:", e)
+        return data[:200]  # Dùng 200 phiên gần nhất
+    except:
         return []
 
-# ------------------- Chuyển kết quả Tài/Xỉu thành T/X -------------------
-def convert_to_tx(results):
-    return ''.join(["T" if r.lower().strip() == "tài" else "X" for r in results])
+# ------------------- Tạo đặc trưng -------------------
+def build_features(data, depth=10):
+    rows = []
+    for i in range(depth, len(data)):
+        row = {}
+        tai_count = 0
+        total_sum = 0
+        odd_even_count = 0
 
-# ------------------- Dự đoán theo công thức 8k -------------------
-def predict_by_cong_thuc(history: str):
-    for length in range(8, 2, -1):
-        pattern = history[-length:]
-        if pattern in cong_thuc:
-            entry = cong_thuc[pattern]
-            return {
-                "du_doan": "Tài" if entry["next"] == "T" else "Xỉu",
-                "confidence": entry["confidence"],
-                "matched_pattern": pattern
-            }
-    return None
+        for j in range(depth):
+            item = data[i - j - 1]
+            d1, d2, d3 = item['dice']
+            total = item['total']
+            is_tai = item['result'] == "Tài"
 
-# ------------------- Dự đoán theo bảng thuật toán -------------------
-def predict_by_thuattoan(history: str):
-    for length in range(5, 0, -1):
-        pattern = history[-length:]
-        if pattern in thuattoan:
-            result = thuattoan[pattern]
-            return {
-                "du_doan": result,
-                "confidence": 60,
-                "matched_pattern": pattern
-            }
-    return None
+            row[f'd{j+1}_1'] = d1
+            row[f'd{j+1}_2'] = d2
+            row[f'd{j+1}_3'] = d3
+            row[f'total{j+1}'] = total
+
+            tai_count += int(is_tai)
+            total_sum += total
+            odd_even_count += sum(x % 2 for x in [d1, d2, d3])
+
+        # Thêm các feature thống kê
+        row["tai_count"] = tai_count
+        row["avg_total"] = total_sum / depth
+        row["odd_count"] = odd_even_count
+
+        label = data[i]["result"]
+        row["label"] = 1 if label == "Tài" else 0
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+    return df
+
+# ------------------- Huấn luyện mô hình -------------------
+def train_model():
+    global model
+    data = fetch_data()
+    if len(data) < 50:
+        print("Không đủ dữ liệu")
+        return
+
+    df = build_features(data, depth=10)
+    X = df.drop("label", axis=1)
+    y = df["label"]
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    model = CatBoostClassifier(
+        iterations=300,
+        learning_rate=0.05,
+        depth=6,
+        random_seed=42,
+        verbose=False
+    )
+    model.fit(X_train, y_train)
+
+    acc = accuracy_score(y_test, model.predict(X_test))
+    print(f"🎯 Độ chính xác (test set): {acc * 100:.2f}%")
+    joblib.dump(model, model_path)
+    print("✅ Đã lưu model CatBoost")
+
+# ------------------- Khởi động API -------------------
+@app.on_event("startup")
+def startup_event():
+    global model
+    if os.path.exists(model_path):
+        model = joblib.load(model_path)
+        print("✅ Tải model từ file")
+    else:
+        train_model()
 
 # ------------------- Trang chủ -------------------
 @app.get("/")
 def home():
-    return {"message": "🎲 API Dự đoán Tài/Xỉu bằng Công thức thống kê đã sẵn sàng."}
+    return {"message": "🎲 API Dự đoán Tài/Xỉu bằng CatBoost AI đã sẵn sàng."}
 
-# ------------------- API chính: /predict -------------------
+# ------------------- Dự đoán -------------------
 @app.get("/predict")
 def predict():
+    global model
     data = fetch_data()
-    if len(data) < 10:
-        return JSONResponse(content={"error": "Không đủ dữ liệu để dự đoán."})
+    if len(data) < 20 or model is None:
+        return JSONResponse(content={"error": "Thiếu dữ liệu hoặc mô hình chưa sẵn sàng."})
 
-    # Sắp xếp tăng dần theo session để lấy phiên mới nhất
-    data = sorted(data, key=lambda x: x["session"])
-    current = data[-1]  # phiên mới nhất
-    current_session = current["session"]
+    df = build_features(data, depth=10)
+    latest = df.drop("label", axis=1).iloc[-1:]
+    prob = model.predict_proba(latest)[0]
+    pred_class = model.predict(latest)[0]
+    pred_prob = prob[pred_class]
+    confidence = max(0.5, min(0.99, pred_prob))
 
-    # Tạo chuỗi lịch sử T/X
-    result_list = [item["result"] for item in data]
-    history_str = convert_to_tx(result_list)
-
-    # Dự đoán theo công thức (ưu tiên 8k, sau đó fallback)
-    prediction = predict_by_cong_thuc(history_str) or predict_by_thuattoan(history_str)
-
-    if not prediction:
-        return JSONResponse(content={"error": "Không tìm được mẫu phù hợp để dự đoán."})
+    du_doan = "Tài" if pred_class == 1 else "Xỉu"
+    current = data[0]
 
     return {
-        "current_session": current_session,
+        "current_session": current["session"],
         "dice": current["dice"],
         "total": current["total"],
         "result": current["result"],
-        "next_session": current_session + 1,
-        "du_doan": prediction["du_doan"],
-        "confidence": f"{prediction['confidence']}%",
-        "matched_pattern": prediction["matched_pattern"]
+        "next_session": current["session"] + 1,
+        "du_doan_AI": du_doan,
+        "confidence": f"{round(confidence * 100, 2)}%",
+        "AI_version": "CatBoost V1",
+        "data_used": f"{len(data)} phiên",
+        "telegram": "@ExTaiXiu2010"
     }
+
+# ------------------- Tự cập nhật mô hình -------------------
+@app.get("/update_model")
+def update_model():
+    train_model()
+    return {"message": "✅ Đã cập nhật mô hình CatBoost từ dữ liệu mới"}
