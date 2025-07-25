@@ -4,3 +4,4 @@ pandas
 catboost
 scikit-learn
 requests
+joblib
