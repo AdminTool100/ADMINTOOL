@@ -5,28 +5,28 @@ from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
-# ------------------- Load công thức -------------------
+# ------------------- Load công thức từ file -------------------
 with open("8k_cong_thuc.json", "r", encoding="utf-8") as f:
     cong_thuc = json.load(f)
 
 with open("thuattoan.json", "r", encoding="utf-8") as f:
     thuattoan = json.load(f)
 
-# ------------------- Lấy dữ liệu lịch sử từ API -------------------
+# ------------------- Hàm lấy dữ liệu lịch sử từ API -------------------
 def fetch_data():
     try:
         res = requests.get("https://saobody-lopq.onrender.com/api/taixiu/history")
         res.raise_for_status()
-        
-        # ✅ FIX JSONDecodeError: API trả về dạng JSON Lines
+
+        # ✅ FIX lỗi JSONDecodeError bằng cách xử lý JSON Lines
         lines = res.text.strip().splitlines()
         data = [json.loads(line) for line in lines if line.strip()]
         return data
     except Exception as e:
-        print("❌ Fetch data failed:", e)
+        print("❌ Lỗi khi lấy dữ liệu:", e)
         return []
 
-# ------------------- Chuyển kết quả về dạng "T"/"X" -------------------
+# ------------------- Chuyển kết quả Tài/Xỉu thành T/X -------------------
 def convert_to_tx(results):
     return ''.join(["T" if r.lower().strip() == "tài" else "X" for r in results])
 
@@ -43,7 +43,7 @@ def predict_by_cong_thuc(history: str):
             }
     return None
 
-# ------------------- Dự đoán theo bảng thuattoan -------------------
+# ------------------- Dự đoán theo bảng thuật toán -------------------
 def predict_by_thuattoan(history: str):
     for length in range(5, 0, -1):
         pattern = history[-length:]
@@ -61,27 +61,27 @@ def predict_by_thuattoan(history: str):
 def home():
     return {"message": "🎲 API Dự đoán Tài/Xỉu bằng Công thức thống kê đã sẵn sàng."}
 
-# ------------------- API Dự đoán -------------------
+# ------------------- API chính: /predict -------------------
 @app.get("/predict")
 def predict():
     data = fetch_data()
     if len(data) < 10:
-        return JSONResponse(content={"error": "Không đủ dữ liệu để dự đoán"})
+        return JSONResponse(content={"error": "Không đủ dữ liệu để dự đoán."})
 
-    # Sắp xếp tăng theo session để lấy đúng phiên mới nhất
+    # Sắp xếp tăng dần theo session để lấy phiên mới nhất
     data = sorted(data, key=lambda x: x["session"])
-    current = data[-1]
+    current = data[-1]  # phiên mới nhất
     current_session = current["session"]
 
-    # Chuyển thành chuỗi lịch sử T/X
+    # Tạo chuỗi lịch sử T/X
     result_list = [item["result"] for item in data]
     history_str = convert_to_tx(result_list)
 
-    # Ưu tiên dùng công thức 8k, fallback sang bảng thuattoan
+    # Dự đoán theo công thức (ưu tiên 8k, sau đó fallback)
     prediction = predict_by_cong_thuc(history_str) or predict_by_thuattoan(history_str)
 
     if not prediction:
-        return JSONResponse(content={"error": "Không tìm được mẫu phù hợp để dự đoán"})
+        return JSONResponse(content={"error": "Không tìm được mẫu phù hợp để dự đoán."})
 
     return {
         "current_session": current_session,
