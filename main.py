@@ -3,7 +3,7 @@ import json
 import pandas as pd
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware  # ✅ Thêm CORS
+from fastapi.middleware.cors import CORSMiddleware
 from catboost import CatBoostClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
@@ -12,10 +12,10 @@ import os
 
 app = FastAPI()
 
-# ✅ Thêm cấu hình CORS
+# ✅ Cho phép CORS từ mọi nguồn
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Cho phép tất cả origin. Có thể thay bằng ["https://yourdomain.com"]
+    allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -24,7 +24,7 @@ app.add_middleware(
 model_path = "model_catboost.pkl"
 model = None
 
-# ------------------- Lấy dữ liệu -------------------
+# ------------------- Lấy dữ liệu từ API -------------------
 def fetch_data():
     try:
         res = requests.get("https://saobody-lopq.onrender.com/api/taixiu/history")
@@ -32,10 +32,11 @@ def fetch_data():
         lines = res.text.strip().splitlines()
         data = [json.loads(line) for line in lines if line.strip()]
         return data[:200]  # Dùng 200 phiên gần nhất
-    except:
+    except Exception as e:
+        print(f"❌ Lỗi khi lấy dữ liệu: {e}")
         return []
 
-# ------------------- Tạo đặc trưng -------------------
+# ------------------- Tạo đặc trưng cho ML -------------------
 def build_features(data, depth=10):
     rows = []
     for i in range(depth, len(data)):
@@ -59,7 +60,6 @@ def build_features(data, depth=10):
             total_sum += total
             odd_even_count += sum(x % 2 for x in [d1, d2, d3])
 
-        # Thêm các feature thống kê
         row["tai_count"] = tai_count
         row["avg_total"] = total_sum / depth
         row["odd_count"] = odd_even_count
@@ -76,7 +76,7 @@ def train_model():
     global model
     data = fetch_data()
     if len(data) < 50:
-        print("Không đủ dữ liệu")
+        print("❌ Không đủ dữ liệu để huấn luyện.")
         return
 
     df = build_features(data, depth=10)
@@ -95,9 +95,9 @@ def train_model():
     model.fit(X_train, y_train)
 
     acc = accuracy_score(y_test, model.predict(X_test))
-    print(f"🎯 Độ chính xác (test set): {acc * 100:.2f}%")
+    print(f"✅ Độ chính xác (test set): {acc * 100:.2f}%")
     joblib.dump(model, model_path)
-    print("✅ Đã lưu model CatBoost")
+    print("✅ Đã lưu mô hình CatBoost.")
 
 # ------------------- Khởi động API -------------------
 @app.on_event("startup")
@@ -105,16 +105,16 @@ def startup_event():
     global model
     if os.path.exists(model_path):
         model = joblib.load(model_path)
-        print("✅ Tải model từ file")
+        print("✅ Đã tải mô hình từ file.")
     else:
         train_model()
 
 # ------------------- Trang chủ -------------------
 @app.get("/")
 def home():
-    return {"message": "🎲 API Dự đoán Tài/Xỉu bằng CatBoost AI đã sẵn sàng."}
+    return {"message": "🎲 API Dự đoán Tài/Xỉu bằng CatBoost đã sẵn sàng."}
 
-# ------------------- Dự đoán -------------------
+# ------------------- API dự đoán -------------------
 @app.get("/predict")
 def predict():
     global model
@@ -125,28 +125,28 @@ def predict():
     df = build_features(data, depth=10)
     latest = df.drop("label", axis=1).iloc[-1:]
     prob = model.predict_proba(latest)[0]
-    pred_class = model.predict(latest)[0]
-    pred_prob = prob[pred_class]
+    pred_class = int(model.predict(latest)[0])
+    pred_prob = float(prob[pred_class])
     confidence = max(0.5, min(0.99, pred_prob))
 
     du_doan = "Tài" if pred_class == 1 else "Xỉu"
     current = data[0]
+    dice = current["dice"]
 
     return {
-        "current_session": current["session"],
-        "dice": current["dice"],
-        "total": current["total"],
-        "result": current["result"],
-        "next_session": current["session"] + 1,
-        "du_doan_AI": du_doan,
-        "confidence": f"{round(confidence * 100, 2)}%",
-        "AI_version": "SIMON SYSTEM V1",
-        "data_used": f"{len(data)} phiên",
-        "telegram": "@ExTaiXiu2010"
+        "id": "ExTaiXiu2010",
+        "phien": current["session"],
+        "xuc_xac_1": dice[0],
+        "xuc_xac_2": dice[1],
+        "xuc_xac_3": dice[2],
+        "tong": current["total"],
+        "ket_qua": current["result"],
+        "du_doan": du_doan,
+        "ty_le_thanh_cong": f"{round(confidence * 100, 2)}%"
     }
 
-# ------------------- Tự cập nhật mô hình -------------------
+# ------------------- Cập nhật mô hình thủ công -------------------
 @app.get("/update_model")
 def update_model():
     train_model()
-    return {"message": "✅ Đã cập nhật mô hình CatBoost từ dữ liệu mới"}
+    return {"message": "✅ Đã cập nhật mô hình CatBoost từ dữ liệu mới."}
