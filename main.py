@@ -3,6 +3,7 @@ import json
 import pandas as pd
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware  # ✅ Thêm CORS
 from catboost import CatBoostClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
@@ -10,6 +11,16 @@ import joblib
 import os
 
 app = FastAPI()
+
+# ✅ Thêm cấu hình CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Cho phép tất cả origin. Có thể thay bằng ["https://yourdomain.com"]
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 model_path = "model_catboost.pkl"
 model = None
 
