@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import random
 from collections import Counter
 import json
@@ -7,7 +8,16 @@ import requests
 
 app = FastAPI()
 
-# ------------------- Công thức cầu thủ công -------------------
+# ------------------- Bật CORS -------------------
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Cho phép mọi domain, bạn có thể giới hạn nếu cần
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ------------------- Công thức cầu -------------------
 def xu_huong_diem(history):
     total1 = history[1]["total"]
     total2 = history[0]["total"]
@@ -104,6 +114,5 @@ def predict():
         "tong": current["total"],
         "ket_qua": current["result"],
         "du_doan": du_doan,
-        "ty_le_thanh_cong": f"{round(confidence * 100, 2)}%",
-        "note": "Dự đoán theo công thức cầu" if confidence > 0.5 else "Không khớp cầu, chọn ngẫu nhiên"
+        "ty_le_thanh_cong": f"{round(confidence * 100, 2)}%"
     }
