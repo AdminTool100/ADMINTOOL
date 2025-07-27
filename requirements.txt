@@ -1,7 +1,3 @@
 fastapi
 uvicorn
-pandas
 requests
-scikit-learn
-catboost
-joblib
