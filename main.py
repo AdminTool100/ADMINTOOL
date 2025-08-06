@@ -80,7 +80,7 @@ def du_doan_theo_cong_thuc(history):
 # ------------------- Fetch dữ liệu -------------------
 def fetch_data():
     try:
-        res = requests.get("https://saobody-lopq.onrender.com/api/taixiu/history")
+        res = requests.get("https://binhtool90-sunwin-predict.onrender.com/api/taixiu/history")
         lines = res.text.strip().splitlines()
         data = [json.loads(line) for line in lines if line.strip()]
         return data
