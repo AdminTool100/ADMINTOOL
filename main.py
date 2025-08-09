@@ -77,7 +77,7 @@ def du_doan_theo_cong_thuc(history):
 # ------------------- Fetch dữ liệu -------------------
 def fetch_data():
     try:
-        res = requests.get("https://binhtool90-sunwin-predict.onrender.com/api/taixiu/history", timeout=10)
+        res = requests.get("https://binhtool90-sunpredict.onrender.com/api/taixiu/history", timeout=10)
         data = res.json()  # ← Sửa chỗ này để parse đúng kiểu JSON
         return data
     except Exception as e:
